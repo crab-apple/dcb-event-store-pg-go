@@ -23,7 +23,10 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.13.1
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.1
+          install-only: true
 
       - name: make check
         run: make check
