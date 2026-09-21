@@ -1,4 +1,4 @@
-package dcb
+package eventstore
 
 import (
 	"fmt"
