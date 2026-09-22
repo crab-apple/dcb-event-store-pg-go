@@ -16,4 +16,5 @@ type NewStore func(t *testing.T) eventstore.Store
 func Run(t *testing.T, newStore NewStore) {
 	t.Run("Append", func(t *testing.T) { testAppend(t, newStore) })
 	t.Run("Read", func(t *testing.T) { testRead(t, newStore) })
+	t.Run("Subscribe", func(t *testing.T) { testSubscribe(t, newStore) })
 }

@@ -26,10 +26,7 @@ func seedABB(t *testing.T, store eventstore.Store) []eventstore.SequencePosition
 		{"B", "tag-2"},
 		{"B", "tag-3"},
 	} {
-		pos, err := store.Append(t.Context(), eventstore.AppendCommand{
-			Events: []eventstore.Event{mustEvent(t, ev.eventType, []string{ev.tag})},
-		})
-		require.NoError(t, err)
+		pos := mustAppendEvent(t, store, ev.eventType, []string{ev.tag})
 		positions = append(positions, pos)
 	}
 	return positions
@@ -181,10 +178,7 @@ func testRead(t *testing.T, newStore NewStore) {
 	t.Run("matches when the event's tags are a superset of the filter's tags", func(t *testing.T) {
 		// Given
 		store := newStore(t)
-		pos, err := store.Append(t.Context(), eventstore.AppendCommand{
-			Events: []eventstore.Event{mustEvent(t, "A", []string{"tag-1", "tag-2"})},
-		})
-		require.NoError(t, err)
+		pos := mustAppendEvent(t, store, "A", []string{"tag-1", "tag-2"})
 
 		// When
 		query := mustQuery(t, []string{"A"}, []string{"tag-1"})
@@ -198,14 +192,8 @@ func testRead(t *testing.T, newStore NewStore) {
 	t.Run("within a query item, type and tags are combined with AND", func(t *testing.T) {
 		// Given
 		store := newStore(t)
-		_, err := store.Append(t.Context(), eventstore.AppendCommand{
-			Events: []eventstore.Event{mustEvent(t, "A", []string{"tag-2"})},
-		})
-		require.NoError(t, err)
-		_, err = store.Append(t.Context(), eventstore.AppendCommand{
-			Events: []eventstore.Event{mustEvent(t, "B", []string{"tag-1"})},
-		})
-		require.NoError(t, err)
+		mustAppendEvent(t, store, "A", []string{"tag-2"})
+		mustAppendEvent(t, store, "B", []string{"tag-1"})
 
 		// When
 		query := mustQuery(t, []string{"A"}, []string{"tag-1"})

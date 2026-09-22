@@ -33,6 +33,16 @@ func scopedCondition(
 	return eventstore.AppendCondition{FailIfEventsMatch: mustQuery(t, types, tags), After: after}
 }
 
+// mustAppendEvent appends a single event as a single command.
+func mustAppendEvent(t *testing.T, store eventstore.Store, eventType string, tags []string) eventstore.SequencePosition {
+	t.Helper()
+	pos, err := store.Append(t.Context(), eventstore.AppendCommand{
+		Events: []eventstore.Event{mustEvent(t, eventType, tags)},
+	})
+	require.NoError(t, err)
+	return pos
+}
+
 func mustRead(
 	t *testing.T,
 	store eventstore.Store,
