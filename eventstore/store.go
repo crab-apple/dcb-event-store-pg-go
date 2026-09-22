@@ -5,7 +5,8 @@ import (
 	"time"
 )
 
-// Store is the DCB event-store contract.
+// Store is the DCB event-store contract. Implementations must be safe for
+// concurrent use by multiple goroutines.
 type Store interface {
 	// Append writes one or more commands atomically, returning the position
 	// of the last event written. It returns an *AppendConditionError if any
