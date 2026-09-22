@@ -92,8 +92,8 @@ func testAppend(t *testing.T, newStore NewStore) {
 
 		// When
 		_, err := store.Append(t.Context(), eventstore.AppendCommand{
-			Events:    []eventstore.Event{mustEvent(t, "A", map[string]string{"e": "1"})},
-			Condition: new(scopedCondition(t, []string{"A"}, map[string]string{"e": "1"}, nil)),
+			Events:    []eventstore.Event{mustEvent(t, "A", []string{"tag-1"})},
+			Condition: new(scopedCondition(t, []string{"A"}, []string{"tag-1"}, nil)),
 		})
 
 		// Then
@@ -104,14 +104,14 @@ func testAppend(t *testing.T, newStore NewStore) {
 		// Given
 		store := newStore(t)
 		_, err := store.Append(t.Context(), eventstore.AppendCommand{
-			Events: []eventstore.Event{mustEvent(t, "A", map[string]string{"e": "1"})},
+			Events: []eventstore.Event{mustEvent(t, "A", []string{"tag-1"})},
 		})
 		require.NoError(t, err)
 
 		// When
-		condition := scopedCondition(t, []string{"A"}, map[string]string{"e": "1"}, nil)
+		condition := scopedCondition(t, []string{"A"}, []string{"tag-1"}, nil)
 		_, err = store.Append(t.Context(), eventstore.AppendCommand{
-			Events:    []eventstore.Event{mustEvent(t, "A", map[string]string{"e": "1"})},
+			Events:    []eventstore.Event{mustEvent(t, "A", []string{"tag-1"})},
 			Condition: &condition,
 		})
 
@@ -126,14 +126,14 @@ func testAppend(t *testing.T, newStore NewStore) {
 		// Given
 		store := newStore(t)
 		posA, err := store.Append(t.Context(), eventstore.AppendCommand{
-			Events: []eventstore.Event{mustEvent(t, "A", map[string]string{"e": "1"})},
+			Events: []eventstore.Event{mustEvent(t, "A", []string{"tag-1"})},
 		})
 		require.NoError(t, err)
 
 		// When
 		_, err = store.Append(t.Context(), eventstore.AppendCommand{
-			Events:    []eventstore.Event{mustEvent(t, "B", map[string]string{"e": "1"})},
-			Condition: new(scopedCondition(t, []string{"A"}, map[string]string{"e": "1"}, &posA)),
+			Events:    []eventstore.Event{mustEvent(t, "B", []string{"tag-1"})},
+			Condition: new(scopedCondition(t, []string{"A"}, []string{"tag-1"}, &posA)),
 		})
 
 		// Then
@@ -144,12 +144,12 @@ func testAppend(t *testing.T, newStore NewStore) {
 		// Given
 		store := newStore(t)
 		_, err := store.Append(t.Context(), eventstore.AppendCommand{
-			Events: []eventstore.Event{mustEvent(t, "A", map[string]string{"e": "1"})},
+			Events: []eventstore.Event{mustEvent(t, "A", []string{"tag-1"})},
 		})
 		require.NoError(t, err)
 
 		// When
-		condition := scopedCondition(t, []string{"A"}, map[string]string{"e": "1"}, nil)
+		condition := scopedCondition(t, []string{"A"}, []string{"tag-1"}, nil)
 		_, err = store.Append(t.Context(),
 			eventstore.AppendCommand{Events: []eventstore.Event{mustEvent(t, "B", nil)}},
 			eventstore.AppendCommand{

@@ -15,4 +15,5 @@ type NewStore func(t *testing.T) eventstore.Store
 // Run executes the conformance suite against newStore.
 func Run(t *testing.T, newStore NewStore) {
 	t.Run("Append", func(t *testing.T) { testAppend(t, newStore) })
+	t.Run("Read", func(t *testing.T) { testRead(t, newStore) })
 }

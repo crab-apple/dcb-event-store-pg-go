@@ -7,29 +7,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mustEvent(t *testing.T, eventType string, tags map[string]string) eventstore.Event {
+func mustEvent(t *testing.T, eventType string, tags []string) eventstore.Event {
 	t.Helper()
-	tagSet := eventstore.EmptyTags()
-	if len(tags) > 0 {
-		var err error
-		tagSet, err = eventstore.TagsFromMap(tags)
-		require.NoError(t, err)
-	}
+	tagSet, err := eventstore.TagsFrom(tags)
+	require.NoError(t, err)
 	return eventstore.Event{Type: eventType, Tags: tagSet}
+}
+
+func mustQuery(t *testing.T, types []string, tags []string) eventstore.Query {
+	t.Helper()
+	tagSet, err := eventstore.TagsFrom(tags)
+	require.NoError(t, err)
+	query, err := eventstore.QueryFromItems([]eventstore.QueryItem{{Types: types, Tags: tagSet}})
+	require.NoError(t, err)
+	return query
 }
 
 func scopedCondition(
 	t *testing.T,
 	types []string,
-	tags map[string]string,
+	tags []string,
 	after *eventstore.SequencePosition,
 ) eventstore.AppendCondition {
 	t.Helper()
-	tagSet, err := eventstore.TagsFromMap(tags)
-	require.NoError(t, err)
-	query, err := eventstore.QueryFromItems([]eventstore.QueryItem{{Types: types, Tags: tagSet}})
-	require.NoError(t, err)
-	return eventstore.AppendCondition{FailIfEventsMatch: query, After: after}
+	return eventstore.AppendCondition{FailIfEventsMatch: mustQuery(t, types, tags), After: after}
 }
 
 func mustRead(
