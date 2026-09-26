@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/crab-apple/dcb-event-store-pg-go/eventstore"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var validIdentifier = regexp.MustCompile(`(?i)^[a-z_][a-z0-9_]{0,62}$`)
+var (
+	validIdentifier                  = regexp.MustCompile(`(?i)^[a-z_][a-z0-9_]{0,62}$`)
+	_               eventstore.Store = (*Store)(nil)
+)
 
 // tagDelimiter separates an event's tags when they're packed into a single
 // text parameter for the stored procedures below -- Postgres array
