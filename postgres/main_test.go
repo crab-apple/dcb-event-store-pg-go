@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crab-apple/dcb-event-store-pg-go/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -68,4 +69,13 @@ func newTestPool(t *testing.T) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 
 	return pool
+}
+
+func newInstalledStore(t *testing.T) (*postgres.Store, *pgxpool.Pool) {
+	t.Helper()
+	pool := newTestPool(t)
+	store, err := postgres.New(pool, postgres.Options{})
+	require.NoError(t, err)
+	require.NoError(t, store.EnsureInstalled(t.Context()))
+	return store, pool
 }

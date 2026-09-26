@@ -1,7 +1,9 @@
 package eventstoretest
 
 import (
+	"encoding/json"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/crab-apple/dcb-event-store-pg-go/eventstore"
@@ -33,6 +35,27 @@ func seedABB(t *testing.T, store eventstore.Store) []eventstore.SequencePosition
 }
 
 func testRead(t *testing.T, newStore NewStore) {
+	t.Run("reads a large number of events correctly and in order", func(t *testing.T) {
+		// Given
+		store := newStore(t)
+		const n = 100_000
+		events := make([]eventstore.Event, n)
+		for i := range events {
+			events[i] = eventstore.Event{Type: "A", Data: json.RawMessage(strconv.Itoa(i))}
+		}
+		_, err := store.Append(t.Context(), eventstore.AppendCommand{Events: events})
+		require.NoError(t, err)
+
+		// When
+		got := mustRead(t, store, eventstore.QueryAll(), eventstore.ReadOptions{})
+
+		// Then
+		require.Len(t, got, n)
+		for i, ev := range got {
+			require.Equal(t, strconv.Itoa(i), string(ev.Event.Data))
+		}
+	})
+
 	t.Run("an empty store yields no events", func(t *testing.T) {
 		for _, backwards := range []bool{false, true} {
 			// Given
@@ -44,6 +67,23 @@ func testRead(t *testing.T, newStore NewStore) {
 			// Then
 			assert.Empty(t, events)
 		}
+	})
+
+	t.Run("reflects a snapshot at call time, not appends made while draining", func(t *testing.T) {
+		// Given
+		store := newStore(t)
+		mustAppendEvent(t, store, "A", nil)
+
+		// When
+		it, err := store.Read(t.Context(), eventstore.QueryAll(), eventstore.ReadOptions{})
+		require.NoError(t, err)
+		mustAppendEvent(t, store, "B", nil)
+
+		// Then
+		events, err := eventstore.Collect(it)
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		assert.Equal(t, "A", events[0].Event.Type)
 	})
 
 	t.Run("yields events in ascending position order by default", func(t *testing.T) {
