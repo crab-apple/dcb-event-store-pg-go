@@ -6,6 +6,11 @@ import "iter"
 // Store.Subscribe. Next advances the iterator and reports whether Event is
 // valid; a Subscribe iterator blocks in Next until an event is available or
 // ctx is canceled. Callers must call Close when done.
+//
+// An EventIterator is not safe for concurrent use. In particular, Close must
+// not be called while a Next call from another goroutine may still be in
+// flight: cancel the iterator's context and wait for Next to return false
+// before calling Close.
 type EventIterator interface {
 	Next() bool
 	Event() SequencedEvent
