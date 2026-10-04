@@ -9,7 +9,7 @@ import (
 )
 
 func TestEnsureInstalled_CreatesSchema(t *testing.T) {
-	pool := newTestPool(t)
+	pool := postgres.NewTestPool(t)
 	store, err := postgres.New(pool, postgres.Options{})
 	require.NoError(t, err)
 	require.NoError(t, store.EnsureInstalled(t.Context()))
@@ -23,7 +23,7 @@ func TestEnsureInstalled_CreatesSchema(t *testing.T) {
 }
 
 func TestEnsureInstalled_IsIdempotent(t *testing.T) {
-	pool := newTestPool(t)
+	pool := postgres.NewTestPool(t)
 	store, err := postgres.New(pool, postgres.Options{})
 	require.NoError(t, err)
 
@@ -32,7 +32,7 @@ func TestEnsureInstalled_IsIdempotent(t *testing.T) {
 }
 
 func TestEnsureInstalled_RespectsTablePrefix(t *testing.T) {
-	pool := newTestPool(t)
+	pool := postgres.NewTestPool(t)
 	store, err := postgres.New(pool, postgres.Options{TablePrefix: "custom"})
 	require.NoError(t, err)
 	require.NoError(t, store.EnsureInstalled(t.Context()))

@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/crab-apple/dcb-event-store-pg-go/eventstore"
+	"github.com/crab-apple/dcb-event-store-pg-go/postgres"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSubscribe_CloseIsSafeWhileNextLoopsInBackground(t *testing.T) {
-	store, _ := newInstalledStore(t)
+	store, _ := postgres.NewInstalledStore(t)
 
 	const iterations = 50
 	for i := range iterations {

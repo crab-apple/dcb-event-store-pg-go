@@ -3,13 +3,14 @@ package postgres_test
 import (
 	"testing"
 
+	"github.com/crab-apple/dcb-event-store-pg-go/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewTestPool_IsolatesDatabases(t *testing.T) {
-	poolA := newTestPool(t)
-	poolB := newTestPool(t)
+	poolA := postgres.NewTestPool(t)
+	poolB := postgres.NewTestPool(t)
 
 	_, err := poolA.Exec(t.Context(), `CREATE TABLE marker (id int)`)
 	require.NoError(t, err)

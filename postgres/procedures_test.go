@@ -13,7 +13,7 @@ import (
 // already installed.
 func newInstalledPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool := newTestPool(t)
+	pool := postgres.NewTestPool(t)
 	store, err := postgres.New(pool, postgres.Options{})
 	require.NoError(t, err)
 	require.NoError(t, store.EnsureInstalled(t.Context()))

@@ -189,7 +189,7 @@ func (s *Store) EnsureInstalled(ctx context.Context) error {
 
 	// Acquires reader-side barrier locks (S leaf, X intent), snapshots the
 	// high-water mark, and returns it; the caller then scans with
-	// sequence_position <= hwm. See docs/postgres/design.md#the-read-barrier.
+	// sequence_position <= hwm.
 	if _, err := conn.Exec(ctx, fmt.Sprintf(`
 		CREATE OR REPLACE FUNCTION %[1]s(
 			p_shared_keys    bigint[],

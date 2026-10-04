@@ -1,4 +1,4 @@
-package postgres_test
+package postgres
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crab-apple/dcb-event-store-pg-go/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -48,7 +47,9 @@ func run(m *testing.M) int {
 	return m.Run()
 }
 
-func newTestPool(t *testing.T) *pgxpool.Pool {
+// NewTestPool creates a fresh, isolated database on the shared test
+// container and returns a pool connected to it.
+func NewTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	ctx := context.Background()
 
@@ -71,10 +72,12 @@ func newTestPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-func newInstalledStore(t *testing.T) (*postgres.Store, *pgxpool.Pool) {
+// NewInstalledStore returns a Store on a fresh test database, with
+// EnsureInstalled already run.
+func NewInstalledStore(t *testing.T) (*Store, *pgxpool.Pool) {
 	t.Helper()
-	pool := newTestPool(t)
-	store, err := postgres.New(pool, postgres.Options{})
+	pool := NewTestPool(t)
+	store, err := New(pool, Options{})
 	require.NoError(t, err)
 	require.NoError(t, store.EnsureInstalled(t.Context()))
 	return store, pool

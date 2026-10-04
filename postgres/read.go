@@ -40,7 +40,7 @@ func (s *Store) Read(ctx context.Context, query eventstore.Query, opts eventstor
 }
 
 // barrierSnapshot acquires the reader-side barrier locks for query, snapshots
-// the high-water mark, and releases them -- see docs/postgres/design.md#the-read-barrier.
+// the high-water mark, and releases them.
 func (s *Store) barrierSnapshot(ctx context.Context, query eventstore.Query) (int64, error) {
 	keys := computeReaderLockKeys(query)
 	var hwm int64

@@ -5,11 +5,12 @@ import (
 
 	"github.com/crab-apple/dcb-event-store-pg-go/eventstore"
 	"github.com/crab-apple/dcb-event-store-pg-go/eventstore/eventstoretest"
+	"github.com/crab-apple/dcb-event-store-pg-go/postgres"
 )
 
 func TestConformance(t *testing.T) {
 	eventstoretest.Run(t, func(t *testing.T) eventstore.Store {
-		store, _ := newInstalledStore(t)
+		store, _ := postgres.NewInstalledStore(t)
 		return store
 	})
 }
