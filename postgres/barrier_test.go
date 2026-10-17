@@ -16,7 +16,18 @@ import (
 // position but stays uncommitted while writer B allocates a higher position
 // and commits. A concurrent Query.All Read must wait for A, not return B
 // without it.
+//
+// Run per append path, since each acquires the writer locks the barrier
+// waits on with its own code.
 func TestRead_BarrierWaitsForSlowerInFlightCommit(t *testing.T) {
+	for _, heldOpen := range []heldOpenWriter{appendHeldOpenViaFunction, appendHeldOpenViaCopy} {
+		t.Run(heldOpen.name, func(t *testing.T) {
+			assertBarrierWaitsForSlowerCommit(t, heldOpen)
+		})
+	}
+}
+
+func assertBarrierWaitsForSlowerCommit(t *testing.T, heldOpen heldOpenWriter) {
 	store, pool := NewInstalledStore(t)
 	ctx := t.Context()
 
@@ -32,7 +43,7 @@ func TestRead_BarrierWaitsForSlowerInFlightCommit(t *testing.T) {
 	defer connA.Release()
 	txA, err := connA.Begin(ctx)
 	require.NoError(t, err)
-	appendHeldOpen(t, ctx, txA, store, eventA)
+	heldOpen.run(t, ctx, txA, store, eventA)
 
 	_, err = store.Append(ctx, eventstore.AppendCommand{Events: []eventstore.Event{eventB}})
 	require.NoError(t, err)
@@ -74,19 +85,45 @@ func TestRead_BarrierWaitsForSlowerInFlightCommit(t *testing.T) {
 	assert.True(t, result.events[0].Position.IsBefore(result.events[1].Position))
 }
 
-// appendHeldOpen runs the real events_append function for a single event
-// inside tx without committing, so its locks and allocated position stay
-// open until the caller commits.
-func appendHeldOpen(t *testing.T, ctx context.Context, tx pgx.Tx, s *Store, event eventstore.Event) {
-	t.Helper()
-	keys := computeWriterLockKeys([]eventstore.Event{event}, nil)
-	types, tags, payloads, condIdxs, condTypes, condTags, condAfter := serializeCommands(
-		[]eventstore.AppendCommand{{Events: []eventstore.Event{event}}},
-	)
-	var pos int64
-	err := tx.QueryRow(ctx,
-		fmt.Sprintf(`SELECT %s($1,$2,$3,$4,$5,$6,$7,$8,$9)`, s.appendFunctionName),
-		keys.leafX, keys.intentS, types, tags, payloads, condIdxs, condTypes, condTags, condAfter,
-	).Scan(&pos)
-	require.NoError(t, err)
+// A heldOpenWriter takes an append's writer locks and allocates a position
+// inside tx without committing, leaving both held until the caller commits.
+type heldOpenWriter struct {
+	name string
+	run  func(t *testing.T, ctx context.Context, tx pgx.Tx, s *Store, event eventstore.Event)
+}
+
+var appendHeldOpenViaFunction = heldOpenWriter{
+	name: "stored procedure path",
+	run: func(t *testing.T, ctx context.Context, tx pgx.Tx, s *Store, event eventstore.Event) {
+		t.Helper()
+		commands := []eventstore.AppendCommand{{Events: []eventstore.Event{event}}}
+		keys := computeWriterLockKeys([]eventstore.Event{event}, nil)
+		types, tags, payloads := serializeEvents(commands)
+		condIdxs, condTypes, condTags, condAfter := serializeConditions(commands)
+		var pos int64
+		err := tx.QueryRow(ctx,
+			fmt.Sprintf(`SELECT %s($1,$2,$3,$4,$5,$6,$7,$8,$9)`, s.appendFunctionName),
+			keys.leafX, keys.intentS, types, tags, payloads, condIdxs, condTypes, condTags, condAfter,
+		).Scan(&pos)
+		require.NoError(t, err)
+	},
+}
+
+var appendHeldOpenViaCopy = heldOpenWriter{
+	name: "copy path",
+	run: func(t *testing.T, ctx context.Context, tx pgx.Tx, s *Store, event eventstore.Event) {
+		t.Helper()
+		keys := computeWriterLockKeys([]eventstore.Event{event}, nil)
+		_, err := tx.Exec(ctx, acquireWriterLocksSQL, keys.leafX, keys.intentS)
+		require.NoError(t, err)
+
+		_, err = tx.CopyFrom(ctx,
+			pgx.Identifier{s.tableName},
+			[]string{"type", "tags", "payload"},
+			pgx.CopyFromSlice(1, func(int) ([]any, error) {
+				return []any{event.Type, event.Tags.Values(), serializePayload(event)}, nil
+			}),
+		)
+		require.NoError(t, err)
+	},
 }

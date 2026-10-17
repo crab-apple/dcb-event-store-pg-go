@@ -25,8 +25,10 @@ type Store struct {
 	pool                *pgxpool.Pool
 	tableName           string
 	appendFunctionName  string
+	checkFunctionName   string
 	barrierFunctionName string
 	notifyChannel       string
+	copyThreshold       int
 }
 
 // Options configures New.
@@ -34,7 +36,13 @@ type Options struct {
 	// TablePrefix, if set, names the events table <prefix>_events instead of
 	// the default "events".
 	TablePrefix string
+
+	// CopyThreshold is the total event count above which Append streams via
+	// COPY instead of a single stored-procedure call. Defaults to 10000.
+	CopyThreshold int
 }
+
+const defaultCopyThreshold = 10_000
 
 // New returns a Store backed by pool. Call EnsureInstalled before using it.
 func New(pool *pgxpool.Pool, opts Options) (*Store, error) {
@@ -45,12 +53,18 @@ func New(pool *pgxpool.Pool, opts Options) (*Store, error) {
 	if !validIdentifier.MatchString(tableName) {
 		return nil, fmt.Errorf("invalid table name %q: must match %s", tableName, validIdentifier)
 	}
+	copyThreshold := opts.CopyThreshold
+	if copyThreshold <= 0 {
+		copyThreshold = defaultCopyThreshold
+	}
 	return &Store{
 		pool:                pool,
 		tableName:           tableName,
 		appendFunctionName:  tableName + "_append",
+		checkFunctionName:   tableName + "_check_conditions",
 		barrierFunctionName: tableName + "_barrier_hwm",
 		notifyChannel:       tableName,
+		copyThreshold:       copyThreshold,
 	}, nil
 }
 
@@ -91,6 +105,55 @@ func (s *Store) EnsureInstalled(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS %[1]s_tags_gin
 		ON %[1]s USING GIN(tags) WITH (fastupdate=off);
 	`, s.tableName)); err != nil {
+		return err
+	}
+
+	// Reports the first command index whose condition matches an event at or
+	// below p_hwm, or NULL if none do. Called by the append procedure below
+	// and, for the COPY path, directly by Append.
+	if _, err := conn.Exec(ctx, fmt.Sprintf(`
+		CREATE OR REPLACE FUNCTION %[1]s(
+			p_cmd_idxs int[],
+			p_types    text[],
+			p_tags     text[],
+			p_after    bigint[],
+			p_hwm      bigint
+		) RETURNS int AS $cc$
+		DECLARE
+			v_failed int;
+		BEGIN
+			SET LOCAL enable_hashjoin = off;
+			SET LOCAL enable_mergejoin = off;
+			SET LOCAL plan_cache_mode = force_generic_plan;
+
+			WITH conds AS MATERIALIZED (
+				SELECT c.cmd_idx, c.ctype,
+				       CASE WHEN c.ctags_str = '' THEN ARRAY[]::text[]
+				            ELSE string_to_array(c.ctags_str, '%[3]s') END AS ctags,
+				       c.after_pos
+				FROM unnest(p_cmd_idxs, p_types, p_tags, p_after)
+				     AS c(cmd_idx, ctype, ctags_str, after_pos)
+			)
+			SELECT c.cmd_idx INTO v_failed
+			FROM conds c
+			WHERE EXISTS (
+				SELECT 1 FROM %[2]s e
+				WHERE e.tags @> c.ctags
+				  AND e.type = c.ctype
+				  AND e.sequence_position > c.after_pos
+				  AND e.sequence_position <= p_hwm
+			)
+			ORDER BY c.cmd_idx
+			LIMIT 1;
+
+			SET LOCAL enable_hashjoin = on;
+			SET LOCAL enable_mergejoin = on;
+			SET LOCAL plan_cache_mode = auto;
+
+			RETURN v_failed;
+		END;
+		$cc$ LANGUAGE plpgsql;
+	`, s.checkFunctionName, s.tableName, tagDelimiter)); err != nil {
 		return err
 	}
 
@@ -140,34 +203,7 @@ func (s *Store) EnsureInstalled(ctx context.Context) error {
 						RAISE EXCEPTION 'APPEND_CONDITION_VIOLATED:cmd=%%', p_cond_cmd_idxs[1];
 					END IF;
 				ELSE
-					SET LOCAL enable_hashjoin = off;
-					SET LOCAL enable_mergejoin = off;
-					SET LOCAL plan_cache_mode = force_generic_plan;
-
-					WITH conds AS MATERIALIZED (
-						SELECT c.cmd_idx, c.ctype,
-						       CASE WHEN c.ctags_str = '' THEN ARRAY[]::text[]
-						            ELSE string_to_array(c.ctags_str, '%[3]s') END AS ctags,
-						       c.after_pos
-						FROM unnest(p_cond_cmd_idxs, p_cond_types, p_cond_tags, p_cond_after)
-						     AS c(cmd_idx, ctype, ctags_str, after_pos)
-					)
-					SELECT c.cmd_idx INTO v_failed
-					FROM conds c
-					WHERE EXISTS (
-						SELECT 1 FROM %[2]s e
-						WHERE e.tags @> c.ctags
-						  AND e.type = c.ctype
-						  AND e.sequence_position > c.after_pos
-						  AND e.sequence_position <= v_hwm
-					)
-					ORDER BY c.cmd_idx
-					LIMIT 1;
-
-					SET LOCAL enable_hashjoin = on;
-					SET LOCAL enable_mergejoin = on;
-					SET LOCAL plan_cache_mode = auto;
-
+					v_failed := %[5]s(p_cond_cmd_idxs, p_cond_types, p_cond_tags, p_cond_after, v_hwm);
 					IF v_failed IS NOT NULL THEN
 						RAISE EXCEPTION 'APPEND_CONDITION_VIOLATED:cmd=%%', v_failed;
 					END IF;
@@ -183,7 +219,7 @@ func (s *Store) EnsureInstalled(ctx context.Context) error {
 			RETURN v_pos;
 		END;
 		$fn$ LANGUAGE plpgsql;
-	`, s.appendFunctionName, s.tableName, tagDelimiter, s.notifyChannel)); err != nil {
+	`, s.appendFunctionName, s.tableName, tagDelimiter, s.notifyChannel, s.checkFunctionName)); err != nil {
 		return err
 	}
 
